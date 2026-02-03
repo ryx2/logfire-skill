@@ -6,16 +6,75 @@ argument-hint: "[errors|slow|recent|search <term>|trace <id>|query <sql>]"
 
 # Logfire Log Query Skill
 
-Query Pydantic Logfire for logs, traces, errors, and performance data using the Logfire MCP server.
+Query Pydantic Logfire for logs, traces, errors, and performance data.
 
-## Available MCP Tools
+## Setup
 
-Use these MCP tools for Logfire queries:
+Requires `LOGFIRE_READ_TOKEN` environment variable (from .env or exported).
 
-- `mcp__logfire__arbitrary_query` - Run SQL queries against the records table
-- `mcp__logfire__find_exceptions_in_file` - Find recent exceptions in a specific file
-- `mcp__logfire__schema_reference` - Get the database schema for query help
-- `mcp__logfire__logfire_link` - Generate UI links for trace IDs
+## Bundled Scripts
+
+Run scripts from the skill's scripts directory using `uv run`:
+
+| Command | Script |
+|---------|--------|
+| `/logfire errors` | `uv run python {SKILL_DIR}/scripts/errors.py` |
+| `/logfire slow` | `uv run python {SKILL_DIR}/scripts/slow.py` |
+| `/logfire recent` | `uv run python {SKILL_DIR}/scripts/recent.py` |
+| `/logfire search <term>` | `uv run python {SKILL_DIR}/scripts/search.py "<term>"` |
+| `/logfire trace <id>` | `uv run python {SKILL_DIR}/scripts/query.py --trace <id>` |
+| `/logfire trace <id> --span <span>` | `uv run python {SKILL_DIR}/scripts/query.py --trace <id> --span <span>` |
+| `/logfire query <sql>` | `uv run python {SKILL_DIR}/scripts/query.py "<sql>"` |
+| `/logfire endpoints` | `uv run python {SKILL_DIR}/scripts/endpoints.py` |
+| `/logfire link <trace_id>` | `uv run python {SKILL_DIR}/scripts/link.py <trace_id>` |
+
+Replace `{SKILL_DIR}` with the actual skill directory path shown in the "Base directory" header.
+
+## Script Options
+
+### errors.py
+```
+--hours N      Hours to look back (default: 24)
+--limit N      Max results (default: 20)
+--file PATH    Filter by filepath in stacktrace
+```
+
+### slow.py
+```
+--hours N      Hours to look back (default: 24)
+--min-ms N     Minimum duration in ms (default: 1000)
+--limit N      Max results (default: 20)
+--endpoint X   Filter by endpoint name
+```
+
+### recent.py
+```
+--minutes N    Minutes to look back (default: 5)
+--limit N      Max results (default: 30)
+```
+
+### search.py
+```
+--hours N      Hours to look back (default: 24)
+--limit N      Max results (default: 20)
+--span         Search span_name instead of message
+--verbose      Show full messages
+```
+
+### query.py
+```
+--trace ID     Look up specific trace
+--span ID      Filter by span ID (requires --trace)
+--age N        Minutes to look back (default: 1440)
+--json         Output raw JSON
+```
+
+### endpoints.py
+```
+--hours N      Hours to look back (default: 24)
+--limit N      Max endpoints (default: 20)
+--errors       Only show endpoints with errors
+```
 
 ## Records Table Schema
 
@@ -28,96 +87,17 @@ Key columns in the `records` table:
 - `trace_id` - Trace identifier (use for grouping related spans)
 - `span_id` - Individual span identifier
 - `attributes` - JSON object with span attributes
-- `service_name` - Service that generated the span
-
-## Common Query Patterns
-
-### Recent Errors
-```sql
-SELECT start_timestamp, span_name, message, trace_id
-FROM records
-WHERE is_exception
-ORDER BY start_timestamp DESC
-LIMIT 20
-```
-
-### Slow Requests (>1 second)
-```sql
-SELECT start_timestamp, span_name, duration * 1000 AS duration_ms, trace_id
-FROM records
-WHERE duration > 1
-ORDER BY duration DESC
-LIMIT 20
-```
-
-### Recent Activity
-```sql
-SELECT start_timestamp, span_name, message, is_exception
-FROM records
-ORDER BY start_timestamp DESC
-LIMIT 30
-```
-
-### Search by Message
-```sql
-SELECT start_timestamp, span_name, message, trace_id
-FROM records
-WHERE message ILIKE '%search_term%'
-ORDER BY start_timestamp DESC
-LIMIT 20
-```
-
-### Trace Lookup
-```sql
-SELECT start_timestamp, span_name, message, attributes
-FROM records
-WHERE trace_id = 'your_trace_id'
-ORDER BY start_timestamp
-```
-
-### Endpoint Stats
-```sql
-SELECT span_name, COUNT(*) as count,
-       SUM(CASE WHEN is_exception THEN 1 ELSE 0 END) as errors,
-       AVG(duration * 1000) as avg_ms
-FROM records
-WHERE span_name IS NOT NULL
-GROUP BY span_name
-ORDER BY count DESC
-LIMIT 20
-```
-
-## Argument Handling
-
-Parse user arguments as follows:
-
-| Command | Action |
-|---------|--------|
-| `/logfire errors` | Query recent exceptions |
-| `/logfire slow` | Query slow requests (>1s) |
-| `/logfire recent` | Show recent activity |
-| `/logfire search <term>` | Search messages for term |
-| `/logfire trace <id>` | Look up specific trace |
-| `/logfire query <sql>` | Run custom SQL query |
-| `/logfire endpoints` | Show endpoint statistics |
-| `/logfire file <path>` | Find exceptions in file |
-
-## Response Format
-
-When presenting results:
-1. Show a summary count first
-2. Format timestamps as readable dates
-3. Truncate long messages to ~100 chars
-4. Include trace_id for drill-down
-5. Offer to generate Logfire UI links for traces
 
 ## Example Usage
 
 User: `/logfire errors`
-→ Use `arbitrary_query` with the recent errors SQL
+→ Run: `uv run python {SKILL_DIR}/scripts/errors.py`
 
 User: `/logfire trace 019c22c6b9fd5b710ca67ed52055d835`
-→ Use `arbitrary_query` filtering by trace_id, then offer `logfire_link`
+→ Run: `uv run python {SKILL_DIR}/scripts/query.py --trace 019c22c6b9fd5b710ca67ed52055d835`
 
-User: `/logfire file app/api/routes.py`
-→ Use `find_exceptions_in_file` with the filepath
+User: `/logfire search "upload" --span`
+→ Run: `uv run python {SKILL_DIR}/scripts/search.py "upload" --span`
+
+User: `/logfire slow --min-ms 2000`
+→ Run: `uv run python {SKILL_DIR}/scripts/slow.py --min-ms 2000`

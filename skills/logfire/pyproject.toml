@@ -1,0 +1,10 @@
+[project]
+name = "logfire-skill"
+version = "0.1.0"
+description = "Logfire query scripts for Claude Code skill"
+requires-python = ">=3.11"
+dependencies = [
+    "logfire>=3.7.1",
+    "python-dotenv>=1.0.0",
+    "httpx>=0.27.0",
+]
